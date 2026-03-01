@@ -1,0 +1,12 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap = { workspace = true }
+tokio = { workspace = true }
+saphyr = { workspace = true }
+
+log = { workspace = true }
+env_logger = { workspace = true }
