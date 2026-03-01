@@ -27,7 +27,7 @@ impl Module {
         }
     }
 
-    pub fn open(&self, state: &State) -> Vec<Yaml> {
+    pub fn open(&'_ self, state: &State) -> Vec<Yaml<'_>> {
         let source_path = state.config.paths.resolve_source(&self.path);
         debug!("Reading source file: {:?}", source_path);
 
