@@ -1,5 +1,5 @@
+use crate::compose::context::Context;
 use crate::compose::processing::generate_stacks;
-use crate::compose::state::State;
 use crate::data::config::Config;
 use clap::Args;
 use log::debug;
@@ -16,7 +16,7 @@ pub struct BuildArgs {
 }
 
 pub fn build_command(config: Config, args: BuildArgs) {
-    let state = State::load(config);
+    let state = Context::load(config);
     debug!("Loaded state: {:?}", state);
 
     generate_stacks(&state);

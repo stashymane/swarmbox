@@ -9,6 +9,7 @@ pub struct Config {
 pub struct Paths {
     pub root: PathBuf,
     pub source: PathBuf,
+    pub configs: PathBuf,
     pub out: PathBuf,
 }
 
@@ -39,11 +40,13 @@ impl Paths {
         if !source_path.exists() {
             return Err(ConfigError::PathMissing("Source".to_string(), source_path));
         }
+        let config_path = root.join("configs");
         let out_path = root.join("out");
 
         Ok(Paths {
             root: root.clone(),
             source: source_path,
+            configs: config_path,
             out: out_path,
         })
     }
