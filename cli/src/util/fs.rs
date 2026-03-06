@@ -1,6 +1,6 @@
 use std::fs::{read_dir, DirEntry, ReadDir};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct WalkPath {
     stack: Vec<ReadDir>,
@@ -32,6 +32,13 @@ impl Iterator for WalkPath {
                 }
             }
         }
+    }
+}
+
+impl WalkPath {
+    pub fn map_to_paths(self) -> io::Result<Vec<PathBuf>> {
+        self.map(|entry| entry.map(|e| e.path()))
+            .collect::<io::Result<Vec<_>>>()
     }
 }
 

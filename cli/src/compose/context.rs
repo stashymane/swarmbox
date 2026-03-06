@@ -56,16 +56,16 @@ fn collect_paths(
 ) -> Result<HashMap<String, ProjectPath>, Error> {
     let mut sources = HashMap::<String, ProjectPath>::new();
 
-    let paths = walk_path(dir)?
-        .map(|entry| entry.map(|e| e.path()))
-        .collect::<Result<Vec<_>, Error>>()?;
+    walk_path(dir)?
+        .map_to_paths()?
+        .into_iter()
+        .filter(filter)
+        .for_each(|path| {
+            let project_path = ProjectPath::from(&path, dir).unwrap();
+            let name = project_path.name().unwrap();
 
-    paths.into_iter().filter(filter).for_each(|path| {
-        let project_path = ProjectPath::from(&path, dir).unwrap();
-        let name = project_path.name().unwrap();
-
-        sources.insert(name, project_path);
-    });
+            sources.insert(name, project_path);
+        });
 
     Ok(sources)
 }
