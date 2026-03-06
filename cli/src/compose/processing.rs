@@ -1,9 +1,10 @@
 use crate::compose::context::Context;
+use crate::compose::filters::configs::process_configs;
 use crate::compose::filters::includes::merge_includes;
 use crate::compose::yaml_util::{read_yml, write_yml};
-use saphyr::Yaml;
+use saphyr::YamlOwned;
 
-pub fn generate_stack(state: &Context, stack: &String) -> Result<(), String> {
+pub fn generate_stack(state: &Context, stack: &String) -> Result<String, String> {
     println!("Generating stack {:?}...", stack);
 
     let Some((name, project_path)) = state
@@ -17,7 +18,7 @@ pub fn generate_stack(state: &Context, stack: &String) -> Result<(), String> {
         })
         .next()
     else {
-        return Err(format!("No stack found for {}", stack));
+        return Err(format!("Could not find {}.yml", stack));
     };
 
     let source_path = project_path.get_full_path(&state.config.paths.source);
@@ -25,8 +26,9 @@ pub fn generate_stack(state: &Context, stack: &String) -> Result<(), String> {
     let yaml = &mut yaml_vec[0];
 
     match yaml {
-        Yaml::Mapping(mapping) => {
+        YamlOwned::Mapping(mapping) => {
             merge_includes(state, mapping);
+            process_configs(state, mapping);
         }
         _ => {
             panic!("Invalid stack file: {:?}", name);
@@ -37,5 +39,5 @@ pub fn generate_stack(state: &Context, stack: &String) -> Result<(), String> {
 
     write_yml(yaml, &output_path);
 
-    Ok(())
+    Ok(name.to_string())
 }

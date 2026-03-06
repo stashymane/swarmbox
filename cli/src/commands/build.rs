@@ -27,7 +27,14 @@ pub fn build_command(config: Config, args: BuildArgs) {
         args.stacks
     };
 
-    stacks
-        .iter()
-        .for_each(|stack| generate_stack(&state, stack).unwrap());
+    for stack in stacks.iter() {
+        let result = generate_stack(&state, stack);
+
+        match result {
+            Ok(name) => {
+                println!("Generated \"{}\"", name);
+            }
+            Err(e) => eprintln!("Failed to process \"{}\": {}", stack, e),
+        }
+    }
 }
