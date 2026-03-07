@@ -1,11 +1,11 @@
 use crate::compose::context::Context;
-use crate::compose::yaml_util::{merge, value_owned};
+use crate::compose::yaml::{MappingExt, YamlOwnedExt};
 use log::debug;
 use saphyr::{LoadableYamlNode, MappingOwned, YamlOwned};
 use std::fs::read_to_string;
 
 pub fn merge_includes(context: &Context, yaml: &mut MappingOwned) {
-    let key = value_owned("include".to_string());
+    let key = YamlOwned::value_of("include");
 
     let Some(include) = yaml.get(&key) else {
         debug!("Include section not found, continuing...");
@@ -34,7 +34,7 @@ pub fn merge_includes(context: &Context, yaml: &mut MappingOwned) {
         let include = yaml_files.get_mut(0).expect("Stack is empty");
         if let Some(mapping) = include.as_mapping_mut() {
             merge_includes(context, mapping);
-            merge(yaml, mapping);
+            yaml.merge_from(mapping);
         }
     }
 }

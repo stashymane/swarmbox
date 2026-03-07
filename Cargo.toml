@@ -11,5 +11,5 @@ tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread", "ti
 clap = { version = "4.5.60", features = ["derive"] }
 saphyr = { version = "0.0.6" }
 
-log = { version = "0.4.29", features = ["max_level_debug", "release_max_level_warn"] }
+log = { version = "0.4.29", features = ["max_level_trace", "release_max_level_warn"] }
 env_logger = "0.11.9"

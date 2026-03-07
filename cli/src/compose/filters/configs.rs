@@ -1,31 +1,181 @@
 use crate::compose::context::{Context, ProjectPath};
-use crate::compose::yaml_util::value_owned;
-use saphyr::{MappingOwned, YamlOwned};
+use crate::compose::yaml::{MappingExt, YamlOwnedExt};
+use log::trace;
+use saphyr::{MappingOwned, Yaml, YamlOwned};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs::read;
 
-pub fn process_configs(context: &Context, yaml: &mut MappingOwned) {
-    let mut mapping = MappingOwned::new();
+#[derive(Debug, Clone)]
+struct ResolvedConfig {
+    key: String,
+    name: String,
+    file: String,
+}
 
-    for (_, project_path) in context.configs.iter() {
-        let key = safe_config_name(project_path).unwrap();
-        let config_path = project_path.get_full_path(&context.config.paths.configs);
-        let hashed_name = hashed_config_name(&key, config_path.as_path()).unwrap();
+pub fn process_configs(context: &Context, yaml: &mut MappingOwned) -> Result<(), String> {
+    let resolved_configs = collect_referenced_configs(context, yaml)?;
+    rewrite_service_config_references(yaml, &resolved_configs);
+    insert_top_level_configs(yaml, &resolved_configs);
+    Ok(())
+}
 
-        let mut content = MappingOwned::new();
-        content.insert(value_owned("name".to_string()), value_owned(hashed_name));
-        content.insert(
-            value_owned("file".to_string()),
-            value_owned(config_path.to_string_lossy().to_string()),
-        );
+fn collect_referenced_configs(
+    context: &Context,
+    yaml: &MappingOwned,
+) -> Result<HashMap<String, ResolvedConfig>, String> {
+    let Some(services) = yaml
+        .get_value("services")
+        .map(YamlOwned::as_mapping)
+        .flatten()
+    else {
+        return Ok(HashMap::new());
+    };
 
-        mapping.insert(value_owned(key), YamlOwned::Mapping(content));
+    let mut resolved_configs = HashMap::new();
+
+    for (key, service) in services.iter() {
+        let Some(service) = service.as_mapping() else {
+            trace!("Service {:?} is not a mapping, skipping", key.as_str());
+            continue;
+        };
+
+        let Some(configs) = service
+            .get_value("configs")
+            .map(YamlOwned::as_sequence)
+            .flatten()
+        else {
+            trace!("Service {:?} has no configs, skipping", key.as_str());
+            continue;
+        };
+
+        for config in configs.iter() {
+            let YamlOwned::Mapping(config) = config else {
+                continue;
+            };
+
+            let Some(YamlOwned::Tagged(tag, source)) = config.get(&YamlOwned::value_of("source"))
+            else {
+                continue;
+            };
+
+            if tag.suffix != "config" {
+                continue;
+            }
+
+            let Some(config_name) = source.as_str() else {
+                continue;
+            };
+
+            if resolved_configs.contains_key(config_name) {
+                continue;
+            }
+
+            let Some(config_path) = context.configs.get(config_name) else {
+                return Err(format!("Config {} not found", config_name));
+            };
+
+            let key = safe_config_name(config_path)
+                .ok_or_else(|| format!("Config {} has an invalid path name", config_name))?;
+            let full_path = config_path.get_full_path(&context.config.paths.configs);
+            let name = hashed_config_name(&key, full_path.as_path())
+                .ok_or_else(|| format!("Failed to hash config {}", config_name))?;
+
+            resolved_configs.insert(
+                config_name.to_string(),
+                ResolvedConfig {
+                    key,
+                    name,
+                    file: full_path.to_string_lossy().into_owned(),
+                },
+            );
+        }
     }
 
-    yaml.insert(
-        value_owned("configs".to_string()),
-        YamlOwned::Mapping(mapping),
-    );
+    Ok(resolved_configs)
+}
+
+fn rewrite_service_config_references(
+    yaml: &mut MappingOwned,
+    resolved_configs: &HashMap<String, ResolvedConfig>,
+) {
+    let Some(YamlOwned::Mapping(services)) = yaml.get_value_mut("services") else {
+        return;
+    };
+
+    for (key, service) in services.iter_mut() {
+        let Some(service) = service.as_mapping_mut() else {
+            trace!("Service {:?} is not a mapping, skipping", key.as_str());
+            continue;
+        };
+
+        let Some(configs) = service
+            .get_value_mut("configs")
+            .map(YamlOwned::as_sequence_mut)
+            .flatten()
+        else {
+            trace!("Service {:?} has no configs, skipping", key.as_str());
+            continue;
+        };
+
+        for config in configs.iter_mut() {
+            let YamlOwned::Mapping(config) = config else {
+                continue;
+            };
+
+            let Some(config_name) = config
+                .get(&YamlOwned::value_of("source"))
+                .and_then(|source| match source {
+                    YamlOwned::Tagged(tag, source) if tag.suffix == "config" => {
+                        source.as_str().map(str::to_owned)
+                    }
+                    _ => None,
+                })
+            else {
+                continue;
+            };
+
+            if let Some(resolved) = resolved_configs.get(&config_name) {
+                config.insert(
+                    YamlOwned::value_of("source"),
+                    YamlOwned::value_of(resolved.key.clone()),
+                );
+            }
+        }
+    }
+}
+
+fn insert_top_level_configs(
+    yaml: &mut MappingOwned,
+    resolved_configs: &HashMap<String, ResolvedConfig>,
+) {
+    if resolved_configs.is_empty() {
+        return;
+    }
+
+    let mut entries = resolved_configs.values().cloned().collect::<Vec<_>>();
+    entries.sort_by(|a, b| a.key.cmp(&b.key));
+
+    let mut mapping = MappingOwned::new();
+
+    for resolved in entries {
+        let mut content = MappingOwned::new();
+        content.insert(
+            YamlOwned::value_of("name"),
+            YamlOwned::value_of(resolved.name),
+        );
+        content.insert(
+            YamlOwned::value_of("file"),
+            YamlOwned::value_of(resolved.file),
+        );
+
+        mapping.insert(
+            YamlOwned::value_of(resolved.key),
+            YamlOwned::Mapping(content),
+        );
+    }
+
+    yaml.insert(YamlOwned::value_of("configs"), YamlOwned::Mapping(mapping));
 }
 
 pub fn safe_config_name(path: &ProjectPath) -> Option<String> {

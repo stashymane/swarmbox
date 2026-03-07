@@ -1,31 +1,8 @@
 use log::debug;
-use saphyr::{LoadableYamlNode, MappingOwned, ScalarOwned, Yaml, YamlEmitter, YamlOwned};
+use saphyr::{LoadableYamlNode, Yaml, YamlEmitter, YamlOwned};
 use std::fs::{create_dir_all, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-
-pub fn merge(target: &mut MappingOwned, source: &MappingOwned) {
-    for (key, src_value) in source {
-        match target.get_mut(key) {
-            Some(dst_value) => match (dst_value, src_value) {
-                (YamlOwned::Mapping(dst_map), YamlOwned::Mapping(src_map)) => {
-                    merge(dst_map, src_map);
-                }
-                (dst_value, src_value) => {
-                    *dst_value = src_value.clone();
-                }
-            },
-            None => {
-                target.insert(key.clone(), src_value.clone());
-            }
-        }
-    }
-}
-
-#[inline(always)]
-pub fn value_owned(value: String) -> YamlOwned {
-    YamlOwned::Value(ScalarOwned::String(value))
-}
 
 pub fn read_yml(path: &PathBuf) -> Vec<YamlOwned> {
     debug!("Reading source file: {:?}", path);

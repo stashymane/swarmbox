@@ -1,7 +1,7 @@
 use crate::compose::context::Context;
 use crate::compose::filters::configs::process_configs;
 use crate::compose::filters::includes::merge_includes;
-use crate::compose::yaml_util::{read_yml, write_yml};
+use crate::compose::yaml::{read_yml, write_yml};
 use saphyr::YamlOwned;
 
 pub fn generate_stack(state: &Context, stack: &String) -> Result<String, String> {
@@ -28,7 +28,7 @@ pub fn generate_stack(state: &Context, stack: &String) -> Result<String, String>
     match yaml {
         YamlOwned::Mapping(mapping) => {
             merge_includes(state, mapping);
-            process_configs(state, mapping);
+            process_configs(state, mapping)?;
         }
         _ => {
             panic!("Invalid stack file: {:?}", name);
