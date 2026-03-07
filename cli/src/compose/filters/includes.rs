@@ -30,9 +30,10 @@ pub fn merge_includes(context: &Context, yaml: &mut MappingOwned) {
         let path = project_path.get_full_path(&context.config.paths.source);
 
         let content = read_to_string(context.config.paths.resolve_source(&path)).unwrap();
-        let yaml_files = YamlOwned::load_from_str(&content).expect("Failed to parse stack");
-        let include = yaml_files.get(0).expect("Stack is empty");
-        if let Some(mapping) = include.as_mapping() {
+        let mut yaml_files = YamlOwned::load_from_str(&content).expect("Failed to parse stack");
+        let include = yaml_files.get_mut(0).expect("Stack is empty");
+        if let Some(mapping) = include.as_mapping_mut() {
+            merge_includes(context, mapping);
             merge(yaml, mapping);
         }
     }
