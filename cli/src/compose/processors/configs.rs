@@ -1,4 +1,5 @@
-use crate::compose::context::{Context, ProjectPath};
+use crate::compose::context::Context;
+use crate::compose::data::paths::RelativePath;
 use crate::compose::stacks::StackDocument;
 use crate::compose::yaml::{MappingExt, YamlOwnedExt};
 use log::trace;
@@ -179,7 +180,7 @@ fn insert_top_level_configs(
     yaml.insert(YamlOwned::value_of("configs"), YamlOwned::Mapping(mapping));
 }
 
-pub fn safe_config_name(path: &ProjectPath) -> Option<String> {
+pub fn safe_config_name(path: &RelativePath) -> Option<String> {
     Some(path.name()?.replace("/", "__"))
 }
 

@@ -1,40 +1,15 @@
+use crate::compose::data::paths::RelativePath;
 use crate::data::config::Config;
 use crate::util::fs::walk_path;
 use std::collections::HashMap;
 use std::io::Error;
-use std::path::{Path, PathBuf, StripPrefixError};
-
-#[derive(Debug)]
-pub struct ProjectPath {
-    inner: PathBuf,
-}
-
-impl ProjectPath {
-    pub fn from(path: &Path, root: &Path) -> Result<ProjectPath, StripPrefixError> {
-        let path = path.strip_prefix(root)?.to_owned();
-        Ok(ProjectPath { inner: path })
-    }
-
-    pub fn get_full_path(&self, root: &Path) -> PathBuf {
-        root.join(&self.inner)
-    }
-
-    pub fn name(&self) -> Option<String> {
-        let segments = self
-            .inner
-            .iter()
-            .map(|os_str| os_str.to_str())
-            .collect::<Option<Vec<_>>>()?;
-
-        Some(segments.join("/"))
-    }
-}
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Context {
     pub config: Config,
-    pub sources: HashMap<String, ProjectPath>,
-    pub configs: HashMap<String, ProjectPath>,
+    pub sources: HashMap<String, RelativePath>,
+    pub configs: HashMap<String, RelativePath>,
 }
 
 impl Context {
@@ -53,15 +28,15 @@ impl Context {
 fn collect_paths(
     dir: &PathBuf,
     filter: fn(&PathBuf) -> bool,
-) -> Result<HashMap<String, ProjectPath>, Error> {
-    let mut sources = HashMap::<String, ProjectPath>::new();
+) -> Result<HashMap<String, RelativePath>, Error> {
+    let mut sources = HashMap::<String, RelativePath>::new();
 
     walk_path(dir)?
         .map_to_paths()?
         .into_iter()
         .filter(filter)
         .for_each(|path| {
-            let project_path = ProjectPath::from(&path, dir).unwrap();
+            let project_path = RelativePath::from(&path, dir).unwrap();
             let name = project_path.name().unwrap();
 
             sources.insert(name, project_path);

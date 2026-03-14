@@ -1,7 +1,8 @@
-use crate::compose::context::{Context, ProjectPath};
+use crate::compose::context::Context;
+use crate::compose::data::paths::RelativePath;
 use crate::compose::processors::configs::process_configs;
 use crate::compose::processors::includes::merge_includes;
-use crate::compose::stacks::{StackDocument, StackDocumentError};
+use crate::compose::stacks::StackDocument;
 use crate::compose::yaml::write_yml;
 use saphyr::YamlOwned;
 
@@ -11,15 +12,11 @@ pub fn generate_stack(context: &Context, stack: &String) -> Result<String, Strin
     println!("Generating stack {:?}...", stack);
     let processors: [Processor; 2] = [merge_includes, process_configs];
 
-    let Some((name, project_path)) = find_stack_by_name(context, stack) else {
-        return Err(format!("Could not find {}.yml", stack));
-    };
+    let (name, project_path) = find_stack_by_name(context, stack)
+        .ok_or_else(|| format!("Could not find {}.yml", stack))?;
 
-    let mut doc = match StackDocument::load(name, context) {
-        Ok(doc) => doc,
-        Err(StackDocumentError::Invalid) => return Err("Failed to load stack".to_string()),
-        Err(StackDocumentError::NotFound) => return Err("Stack not found".to_string()),
-    };
+    let mut doc = StackDocument::load(name, context)
+        .or_else(|e| Err(format!("Failed to load stack \"{}\": {:?}", stack, e)))?;
 
     for processor in processors {
         processor(&mut doc, context)?;
@@ -33,7 +30,7 @@ pub fn generate_stack(context: &Context, stack: &String) -> Result<String, Strin
 fn find_stack_by_name<'a>(
     state: &'a Context,
     stack_name: &String,
-) -> Option<(&'a String, &'a ProjectPath)> {
+) -> Option<(&'a String, &'a RelativePath)> {
     state
         .sources
         .iter()
