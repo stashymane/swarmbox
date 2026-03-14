@@ -179,7 +179,7 @@ fn insert_top_level_configs(
 }
 
 pub fn safe_config_name(path: &ProjectPath) -> Option<String> {
-    Some(path.name()?.replace("/", "_"))
+    Some(path.name()?.replace("/", "__"))
 }
 
 fn hashed_config_name(base: &str, full_path: &std::path::Path) -> Option<String> {
