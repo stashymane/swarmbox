@@ -1,7 +1,8 @@
 use crate::compose::context::{Context, ProjectPath};
+use crate::compose::stacks::StackDocument;
 use crate::compose::yaml::{MappingExt, YamlOwnedExt};
 use log::trace;
-use saphyr::{MappingOwned, Yaml, YamlOwned};
+use saphyr::{MappingOwned, YamlOwned};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::read;
@@ -13,10 +14,10 @@ struct ResolvedConfig {
     file: String,
 }
 
-pub fn process_configs(context: &Context, yaml: &mut MappingOwned) -> Result<(), String> {
-    let resolved_configs = collect_referenced_configs(context, yaml)?;
-    rewrite_service_config_references(yaml, &resolved_configs);
-    insert_top_level_configs(yaml, &resolved_configs);
+pub fn process_configs(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
+    let resolved_configs = collect_referenced_configs(context, &doc.root)?;
+    rewrite_service_config_references(&mut doc.root, &resolved_configs);
+    insert_top_level_configs(&mut doc.root, &resolved_configs);
     Ok(())
 }
 

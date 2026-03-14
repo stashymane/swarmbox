@@ -1,10 +1,16 @@
 use crate::compose::context::Context;
+use crate::compose::stacks::StackDocument;
 use crate::compose::yaml::{MappingExt, YamlOwnedExt};
 use log::debug;
 use saphyr::{LoadableYamlNode, MappingOwned, YamlOwned};
 use std::fs::read_to_string;
 
-pub fn merge_includes(context: &Context, yaml: &mut MappingOwned) {
+pub fn merge_includes(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
+    merge_includes_recursive(context, &mut doc.root);
+    Ok(())
+}
+
+fn merge_includes_recursive(context: &Context, yaml: &mut MappingOwned) {
     let key = YamlOwned::value_of("include");
 
     let Some(include) = yaml.get(&key) else {
@@ -33,7 +39,7 @@ pub fn merge_includes(context: &Context, yaml: &mut MappingOwned) {
         let mut yaml_files = YamlOwned::load_from_str(&content).expect("Failed to parse stack");
         let include = yaml_files.get_mut(0).expect("Stack is empty");
         if let Some(mapping) = include.as_mapping_mut() {
-            merge_includes(context, mapping);
+            merge_includes_recursive(context, mapping);
             yaml.merge_from(mapping);
         }
     }
