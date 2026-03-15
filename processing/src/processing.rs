@@ -1,10 +1,10 @@
-use crate::compose::data::context::Context;
-use crate::compose::data::paths::RelativePath;
-use crate::compose::data::stacks::StackDocument;
-use crate::compose::processors::configs::process_configs;
-use crate::compose::processors::includes::merge_includes;
-use crate::compose::yaml::write_yml;
+use crate::data::context::Context;
+use crate::data::stacks::StackDocument;
+use crate::processors::configs::process_configs;
+use crate::processors::includes::merge_includes;
+use crate::yaml::write_yml;
 use saphyr::YamlOwned;
+use shared::data::RelativePath;
 
 type Processor = fn(&mut StackDocument, &Context) -> Result<(), String>;
 

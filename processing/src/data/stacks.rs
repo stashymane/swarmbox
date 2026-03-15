@@ -1,5 +1,5 @@
-use crate::compose::data::context::Context;
-use crate::compose::yaml::read_yml;
+use crate::data::context::Context;
+use crate::yaml::read_yml;
 use saphyr::{MappingOwned, YamlOwned};
 use std::path::PathBuf;
 

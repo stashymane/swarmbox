@@ -1,4 +1,4 @@
-use crate::compose::yaml::YamlOwnedExt;
+use crate::yaml::YamlOwnedExt;
 use saphyr::{MappingOwned, YamlOwned};
 
 pub trait MappingExt {

@@ -1,10 +1,10 @@
-use crate::compose::data::context::Context;
-use crate::compose::data::paths::RelativePath;
-use crate::compose::data::stacks::StackDocument;
-use crate::compose::yaml::{MappingExt, YamlOwnedExt};
+use crate::data::context::Context;
+use crate::data::stacks::StackDocument;
+use crate::yaml::{MappingExt, YamlOwnedExt};
 use log::trace;
 use saphyr::{MappingOwned, YamlOwned};
 use sha2::{Digest, Sha256};
+use shared::data::RelativePath;
 use std::collections::HashMap;
 use std::fs::read;
 

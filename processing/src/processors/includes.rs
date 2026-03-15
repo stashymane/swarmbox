@@ -1,6 +1,6 @@
-use crate::compose::data::context::Context;
-use crate::compose::data::stacks::StackDocument;
-use crate::compose::yaml::{MappingExt, YamlOwnedExt};
+use crate::data::context::Context;
+use crate::data::stacks::StackDocument;
+use crate::yaml::{MappingExt, YamlOwnedExt};
 use log::debug;
 use saphyr::{MappingOwned, YamlOwned};
 

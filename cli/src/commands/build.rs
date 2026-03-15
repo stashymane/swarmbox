@@ -1,8 +1,8 @@
-use crate::compose::data::context::Context;
-use crate::compose::processing::generate_stack;
-use crate::data::config::Config;
 use clap::Args;
 use log::debug;
+use processing::data::context::Context;
+use processing::processing::generate_stack;
+use shared::data::Config;
 use std::path::PathBuf;
 
 #[derive(Debug, Args)]

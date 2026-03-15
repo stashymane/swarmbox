@@ -1,9 +1,8 @@
-use crate::compose::data::paths::RelativePath;
-use crate::data::config::Config;
-use crate::util::fs::walk_path;
+use shared::data::{Config, RelativePath};
 use std::collections::HashMap;
 use std::io::Error;
 use std::path::PathBuf;
+use util::walk_path;
 
 #[derive(Debug)]
 pub struct Context {
