@@ -1,4 +1,3 @@
-use crate::data::context::ProcessingContext;
 use crate::data::stacks::StackDocument;
 use crate::processors::processor::Processor;
 use crate::yaml::{MappingExt, YamlOwnedExt};

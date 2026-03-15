@@ -1,5 +1,5 @@
 use crate::commands::build::build_command;
-use crate::commands::main::{Cli, Commands};
+use crate::commands::root::{Cli, Commands};
 use clap::Parser;
 use log::{debug, info};
 use shared::data::Config;
@@ -23,9 +23,15 @@ async fn main() {
     debug!("Loaded config: {:?}", config);
 
     let before = Instant::now();
-    match cli.command {
-        Commands::Build(args) => build_command(config, args).await.unwrap(),
+    let result = match cli.command {
+        Commands::Build(args) => build_command(config, args).await,
+    };
+
+    if let Err(err) = result {
+        eprintln!("Build failed: {:?}", err);
+        std::process::exit(1);
     }
+
     let after = Instant::now();
     info!("Done in {:?}", after.duration_since(before));
 }

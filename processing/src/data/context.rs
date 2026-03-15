@@ -3,6 +3,7 @@ use crate::data::stacks::StackDocument;
 use crate::processors::configs::ConfigProcessor;
 use crate::processors::includes::IncludeProcessor;
 use crate::processors::processor::Processor;
+use crate::processors::secrets::SecretProcessor;
 use crate::yaml::write_yml;
 use log::debug;
 use saphyr::YamlOwned;
@@ -22,6 +23,7 @@ impl ProcessingContext {
         let mut processors: Vec<Box<dyn Processor>> = vec![
             Box::new(IncludeProcessor::new()),
             Box::new(ConfigProcessor::new()),
+            Box::new(SecretProcessor::new()),
         ];
 
         for processor in processors.iter_mut() {
