@@ -1,6 +1,7 @@
-use crate::data::context::Context;
-use crate::yaml::read_yml;
-use saphyr::{MappingOwned, YamlOwned};
+use crate::yaml::{read_yml, write_yml};
+use saphyr::{MappingOwned, Yaml, YamlOwned};
+use shared::data::{Config, RelativePath};
+use std::fmt::Debug;
 use std::path::PathBuf;
 
 pub struct StackDocument {
@@ -16,27 +17,42 @@ pub enum StackDocumentError {
     Invalid(String),
 }
 
+impl StackDocumentError {
+    fn invalid_name(name: impl Debug) -> Self {
+        StackDocumentError::Invalid(format!("Stack name is invalid: {:?}", name))
+    }
+
+    fn not_found(name: impl Debug) -> Self {
+        StackDocumentError::NotFound(format!("Stack \"{:?}\" not found", name))
+    }
+
+    fn not_valid(name: impl Debug) -> Self {
+        StackDocumentError::Invalid(format!("Stack \"{:?}\" is not valid", name))
+    }
+}
+
 impl StackDocument {
-    pub async fn load(name: &str, context: &Context) -> Result<StackDocument, StackDocumentError> {
-        let project_path = context.sources.get(name).ok_or_else(|| {
-            StackDocumentError::NotFound(format!("Stack \"{}\" not found", name).to_string())
+    pub async fn load(
+        project_path: &RelativePath,
+        config: &Config,
+    ) -> Result<StackDocument, StackDocumentError> {
+        let source_path = project_path.get_absolute_path(&config.paths.source);
+        let name = Option::ok_or_else(project_path.name(), || {
+            StackDocumentError::invalid_name(project_path)
         })?;
-        let source_path = project_path.get_full_path(&context.config.paths.source);
+
         let mut yaml_vec = read_yml(&source_path).await;
-        let yaml = yaml_vec.pop().ok_or_else(|| {
-            StackDocumentError::Invalid(format!("Stack \"{}\" not found", name).to_string())
+
+        let yaml = Option::ok_or_else(yaml_vec.pop(), || {
+            StackDocumentError::not_found(project_path)
         })?;
 
         let mapping = match yaml {
             YamlOwned::Mapping(mapping) => mapping,
-            _ => {
-                return Err(StackDocumentError::Invalid(
-                    format!("Stack \"{}\" is not valid", name).to_string(),
-                ));
-            }
+            _ => return Err(StackDocumentError::not_valid(project_path)),
         };
 
-        let output_path = project_path.get_full_path(&context.config.paths.out);
+        let output_path = project_path.get_absolute_path(&config.paths.out);
 
         let doc = StackDocument {
             stack_name: name.to_owned(),
@@ -46,5 +62,10 @@ impl StackDocument {
         };
 
         Ok(doc)
+    }
+
+    pub async fn write(self) {
+        let yaml = YamlOwned::Mapping(self.root);
+        write_yml(&Yaml::from(&yaml), &self.output_path).await;
     }
 }

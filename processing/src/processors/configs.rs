@@ -1,12 +1,66 @@
-use crate::data::context::Context;
 use crate::data::stacks::StackDocument;
+use crate::processors::processor::Processor;
 use crate::yaml::{MappingExt, YamlOwnedExt};
-use log::trace;
+use async_trait::async_trait;
+use log::{debug, trace};
 use saphyr::{MappingOwned, YamlOwned};
 use sha2::{Digest, Sha256};
-use shared::data::RelativePath;
+use shared::data::{Config, RelativePath};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use tokio::fs::read;
+use util::walk_path;
+
+pub struct ConfigProcessor {
+    configs: HashMap<String, ConfigEntry>,
+}
+
+impl ConfigProcessor {
+    pub fn new() -> Self {
+        Self {
+            configs: HashMap::new(),
+        }
+    }
+}
+
+pub struct ConfigEntry {
+    name: String,
+    absolute_path: PathBuf,
+    project_path: RelativePath,
+}
+
+#[async_trait]
+impl Processor for ConfigProcessor {
+    async fn setup(&mut self, config: &Config) -> Result<(), String> {
+        let config_dir = &config.paths.configs;
+        let config_files = walk_path(config_dir)
+            .await
+            .map_err(|e| format!("Failed to walk config: {:?}", e))?;
+
+        for path in config_files {
+            let project_path = RelativePath::from(&path, config_dir)
+                .map_err(|e| format!("Failed to retrieve relative path: {:?}", e))?;
+            let name = Option::ok_or(project_path.name(), "Failed to retrieve project name")?;
+
+            let entry = ConfigEntry {
+                name: name.to_owned(),
+                absolute_path: path,
+                project_path,
+            };
+
+            self.configs.insert(name, entry);
+        }
+
+        Ok(())
+    }
+
+    async fn process(&self, doc: &mut StackDocument, _config: &Config) -> Result<(), String> {
+        debug!("{}: Processing configs...", doc.stack_name);
+        let resolved_configs = collect_and_rewrite_configs(self, &mut doc.root).await?;
+        insert_top_level_configs(&mut doc.root, &resolved_configs);
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone)]
 struct ResolvedConfig {
@@ -15,14 +69,8 @@ struct ResolvedConfig {
     file: String,
 }
 
-pub async fn process_configs(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
-    let resolved_configs = collect_and_rewrite_configs(context, &mut doc.root).await?;
-    insert_top_level_configs(&mut doc.root, &resolved_configs);
-    Ok(())
-}
-
 async fn collect_and_rewrite_configs(
-    context: &Context,
+    context: &ConfigProcessor,
     yaml: &mut MappingOwned,
 ) -> Result<HashMap<String, ResolvedConfig>, String> {
     let Some(services) = yaml
@@ -50,9 +98,12 @@ async fn collect_and_rewrite_configs(
             continue;
         };
 
-        for config in configs.iter_mut() {
-            let Some(config_map) = config.as_mapping_mut() else {
-                trace!("Config {:?} is not a mapping, skipping", config.as_str());
+        for config_element in configs.iter_mut() {
+            let Some(config_map) = config_element.as_mapping_mut() else {
+                trace!(
+                    "Config {:?} is not a mapping, skipping",
+                    config_element.as_str()
+                );
                 continue;
             };
 
@@ -79,16 +130,18 @@ async fn collect_and_rewrite_configs(
                 continue;
             }
 
-            let Some(config_path) = context.configs.get(&config_name) else {
+            let Some(config) = context.configs.get(&config_name) else {
                 return Err(format!("Config {} not found", config_name));
             };
+            let full_path = &config.absolute_path;
 
-            let key = safe_config_name(config_path)
-                .ok_or_else(|| format!("Config {} has an invalid path name", config_name))?;
-            let full_path = config_path.get_full_path(&context.config.paths.configs);
-            let name = hashed_config_name(&key, full_path.as_path())
-                .await
-                .ok_or_else(|| format!("Failed to hash config {}", config_name))?;
+            let key = Option::ok_or_else(safe_config_name(&config.project_path), || {
+                format!("Config {} has an invalid path name", config_name)
+            })?;
+            let name =
+                Option::ok_or_else(hashed_config_name(&key, full_path.as_path()).await, || {
+                    format!("Failed to hash config {}", config_name)
+                })?;
 
             config_map.insert(
                 YamlOwned::value_of("source"),

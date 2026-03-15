@@ -1,9 +1,9 @@
-use crate::data::context::Context;
+use crate::data::context::ProcessingContext;
 use crate::data::stacks::StackDocument;
 use crate::yaml::MappingExt;
 use saphyr::YamlOwned;
 
-pub async fn process_secrets(doc: &mut StackDocument, _context: &Context) -> Result<(), String> {
+pub async fn process_secrets(doc: &mut StackDocument, _context: &ProcessingContext) -> Result<(), String> {
     //TODO
     let yaml = &doc.root;
 

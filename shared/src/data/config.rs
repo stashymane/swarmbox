@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct Config {
@@ -15,30 +16,43 @@ pub struct Paths {
 
 #[derive(Debug)]
 pub enum ConfigError {
-    PathMissing(String, PathBuf),
+    PathMissing(String),
+    InvalidPath(String),
+}
+
+impl ConfigError {
+    fn path_missing(name: &str, path: &Path) -> ConfigError {
+        ConfigError::PathMissing(format!("{} path missing: {:?}", name, path))
+    }
+    fn invalid_path(path: &Path, err: &io::Error) -> ConfigError {
+        ConfigError::InvalidPath(format!(
+            "Project root \"{:?}\" is not valid: {:?}",
+            path, err
+        ))
+    }
 }
 
 impl Config {
-    pub fn new(project: &PathBuf) -> Result<Config, ConfigError> {
-        let project_path = project.clone();
+    pub fn new(project_path: &PathBuf) -> Result<Config, ConfigError> {
         if !project_path.exists() {
-            return Err(ConfigError::PathMissing(
-                "Project".to_string(),
-                project_path,
-            ));
+            return Err(ConfigError::path_missing("Project", project_path));
         }
 
         Ok(Config {
-            paths: Paths::from_root(project.clone())?,
+            paths: Paths::from_root(project_path.clone())?,
         })
     }
 }
 
 impl Paths {
     pub fn from_root(root: PathBuf) -> Result<Paths, ConfigError> {
+        let root = Result::map_err(root.canonicalize(), |err| {
+            ConfigError::invalid_path(&root, &err)
+        })?;
+
         let source_path = root.join("src");
         if !source_path.exists() {
-            return Err(ConfigError::PathMissing("Source".to_string(), source_path));
+            return Err(ConfigError::path_missing("Source", &source_path));
         }
         let config_path = root.join("configs");
         let out_path = root.join("out");

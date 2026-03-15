@@ -17,7 +17,7 @@ pub async fn read_yml(path: &PathBuf) -> Vec<YamlOwned> {
     yaml_files
 }
 
-pub async fn write_yml(yaml: &YamlOwned, path: &PathBuf) {
+pub async fn write_yml(yaml: &Yaml<'_>, path: &PathBuf) {
     debug!("Creating output path: {:?}", path.parent());
     create_dir_all(path.parent().expect("Failed to retrieve stack parent path"))
         .await
@@ -25,9 +25,7 @@ pub async fn write_yml(yaml: &YamlOwned, path: &PathBuf) {
 
     let mut output = String::new();
     let mut emitter = YamlEmitter::new(&mut output);
-    emitter
-        .dump(&Yaml::from(yaml))
-        .expect("Failed to dump yaml");
+    emitter.dump(yaml).expect("Failed to dump yaml");
 
     let mut output_file = File::create(path)
         .await

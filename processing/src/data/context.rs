@@ -1,52 +1,57 @@
+use crate::data::cache::Cache;
+use crate::data::stacks::StackDocument;
+use crate::processors::configs::ConfigProcessor;
+use crate::processors::includes::IncludeProcessor;
+use crate::processors::processor::Processor;
+use crate::yaml::write_yml;
+use log::debug;
+use saphyr::YamlOwned;
 use shared::data::{Config, RelativePath};
-use std::collections::HashMap;
-use std::io::Error;
-use std::path::PathBuf;
-use util::walk_path;
+use tokio::io::AsyncWriteExt;
 
-#[derive(Debug)]
-pub struct Context {
+pub struct ProcessingContext {
     pub config: Config,
-    pub sources: HashMap<String, RelativePath>,
-    pub configs: HashMap<String, RelativePath>,
+    pub cache: Cache,
+    pub processors: Vec<Box<dyn Processor>>,
 }
 
-impl Context {
-    pub async fn load(config: Config) -> Context {
-        let sources = collect_paths(&config.paths.source, is_yml).await.unwrap();
-        let configs = collect_paths(&config.paths.configs, |_| true)
-            .await
-            .unwrap();
+impl ProcessingContext {
+    pub async fn load(config: Config) -> Result<ProcessingContext, String> {
+        let cache = Cache::load(&config.paths.root, |_path| false).await?;
 
-        Context {
-            config,
-            sources,
-            configs,
+        let mut processors: Vec<Box<dyn Processor>> = vec![
+            Box::new(IncludeProcessor::new()),
+            Box::new(ConfigProcessor::new()),
+        ];
+
+        for processor in processors.iter_mut() {
+            processor.setup(&config).await?;
         }
+
+        Ok(ProcessingContext {
+            config,
+            cache,
+            processors,
+        })
     }
-}
 
-async fn collect_paths(
-    dir: &PathBuf,
-    filter: fn(&PathBuf) -> bool,
-) -> Result<HashMap<String, RelativePath>, Error> {
-    let mut sources = HashMap::<String, RelativePath>::new();
+    pub async fn process(&self, source_path: &RelativePath) -> Result<(), String> {
+        debug!("Processing \"{:?}\"", source_path);
+        let mut doc = StackDocument::load(source_path, &self.config)
+            .await
+            .or_else(|e| {
+                Err(format!(
+                    "Failed to load stack \"{:?}\": {:?}",
+                    source_path, e
+                ))
+            })?;
 
-    walk_path(dir)
-        .await?
-        .into_iter()
-        .filter(filter)
-        .for_each(|path| {
-            let project_path = RelativePath::from(&path, dir).unwrap();
-            let name = project_path.name().unwrap();
+        for processor in self.processors.iter() {
+            processor.process(&mut doc, &self.config).await?;
+        }
 
-            sources.insert(name, project_path);
-        });
+        doc.write().await;
 
-    Ok(sources)
-}
-
-fn is_yml(file: &PathBuf) -> bool {
-    file.extension() == Some(std::ffi::OsStr::new("yml"))
-        || file.extension() == Some(std::ffi::OsStr::new("yaml"))
+        Ok(())
+    }
 }
