@@ -1,0 +1,3 @@
+services:
+  included_service:
+    image: hello-world

@@ -1,0 +1,27 @@
+configs:
+  inline_config:
+    inline: |
+      configuration content...
+
+secrets:
+  environment_secret:
+    environment: ENV_SECRET
+  file_secret:
+    file: ./file.txt
+  external_secret:
+    external: true
+
+include:
+  - module.yml
+
+services:
+  test_service:
+    image: hello-world
+    ports: [ "80:80" ]
+    configs:
+      - source: !config config.yml
+        target: /config.yml
+      - "source.yml:/target.yml"
+    secrets:
+      - environment_secret
+      - file_secret
