@@ -1,4 +1,4 @@
-use crate::compose::context::Context;
+use crate::compose::data::context::Context;
 use crate::compose::processing::generate_stack;
 use crate::data::config::Config;
 use clap::Args;

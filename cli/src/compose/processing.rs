@@ -1,8 +1,8 @@
-use crate::compose::context::Context;
+use crate::compose::data::context::Context;
 use crate::compose::data::paths::RelativePath;
+use crate::compose::data::stacks::StackDocument;
 use crate::compose::processors::configs::process_configs;
 use crate::compose::processors::includes::merge_includes;
-use crate::compose::stacks::StackDocument;
 use crate::compose::yaml::write_yml;
 use saphyr::YamlOwned;
 
@@ -12,7 +12,7 @@ pub fn generate_stack(context: &Context, stack: &String) -> Result<String, Strin
     println!("Generating stack {:?}...", stack);
     let processors: [Processor; 2] = [merge_includes, process_configs];
 
-    let (name, project_path) = find_stack_by_name(context, stack)
+    let (name, _) = find_stack_by_name(context, stack)
         .ok_or_else(|| format!("Could not find {}.yml", stack))?;
 
     let mut doc = StackDocument::load(name, context)

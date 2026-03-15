@@ -1,7 +1,8 @@
-use crate::compose::context::Context;
+use crate::compose::data::context::Context;
 use crate::compose::yaml::read_yml;
 use saphyr::{MappingOwned, YamlOwned};
 use std::path::PathBuf;
+
 pub struct StackDocument {
     pub stack_name: String,
     pub source_path: PathBuf,
@@ -17,21 +18,20 @@ pub enum StackDocumentError {
 
 impl StackDocument {
     pub fn load(name: &str, context: &Context) -> Result<StackDocument, StackDocumentError> {
-        let project_path = context
-            .sources
-            .get(name)
-            .ok_or_else(|| StackDocumentError::NotFound("Stack not found".to_string()))?;
+        let project_path = context.sources.get(name).ok_or_else(|| {
+            StackDocumentError::NotFound(format!("Stack \"{}\" not found", name).to_string())
+        })?;
         let source_path = project_path.get_full_path(&context.config.paths.source);
         let mut yaml_vec = read_yml(&source_path);
-        let yaml = yaml_vec
-            .pop()
-            .ok_or_else(|| StackDocumentError::Invalid("Stack not found".to_string()))?;
+        let yaml = yaml_vec.pop().ok_or_else(|| {
+            StackDocumentError::Invalid(format!("Stack \"{}\" not found", name).to_string())
+        })?;
 
         let mapping = match yaml {
             YamlOwned::Mapping(mapping) => mapping,
             _ => {
                 return Err(StackDocumentError::Invalid(
-                    "Failed to load stack".to_string(),
+                    format!("Stack \"{}\" is not valid", name).to_string(),
                 ));
             }
         };

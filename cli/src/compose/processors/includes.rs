@@ -1,16 +1,19 @@
-use crate::compose::context::Context;
-use crate::compose::stacks::StackDocument;
+use crate::compose::data::context::Context;
+use crate::compose::data::stacks::StackDocument;
 use crate::compose::yaml::{MappingExt, YamlOwnedExt};
 use log::debug;
-use saphyr::{LoadableYamlNode, MappingOwned, YamlOwned};
-use std::fs::read_to_string;
+use saphyr::{MappingOwned, YamlOwned};
 
 pub fn merge_includes(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
-    merge_includes_recursive(context, &mut doc.root)?;
+    merge_includes_recursive(context, &mut doc.root, &mut Vec::new())?;
     Ok(())
 }
 
-fn merge_includes_recursive(context: &Context, yaml: &mut MappingOwned) -> Result<(), String> {
+fn merge_includes_recursive(
+    context: &Context,
+    yaml: &mut MappingOwned,
+    stack: &mut Vec<String>,
+) -> Result<(), String> {
     let key = YamlOwned::value_of("include");
 
     let Some(include) = yaml.get(&key) else {
@@ -31,23 +34,18 @@ fn merge_includes_recursive(context: &Context, yaml: &mut MappingOwned) -> Resul
     yaml.remove(&key);
 
     for name in include_names.iter() {
-        debug!("Merging module {:?}", name);
-        let project_path = context.sources.get(name).expect("Module not found");
-        let source_path = project_path.get_full_path(&context.config.paths.source);
-
-        let content = read_to_string(&source_path).or_else(|err| {
-            Err(format!(
-                "Failed to read included file \"{:?}\": {}",
-                source_path, err
-            )
-            .to_string())
-        })?;
-        let mut yaml_files = YamlOwned::load_from_str(&content).expect("Failed to parse stack");
-        let include = yaml_files.get_mut(0).expect("Stack is empty");
-        if let Some(mapping) = include.as_mapping_mut() {
-            merge_includes_recursive(context, mapping)?;
-            yaml.merge_from(mapping);
+        if stack.contains(name) {
+            return Err(format!("Circular include detected: {:?}", name));
         }
+
+        debug!("Merging module {:?}", name);
+        let mut doc = StackDocument::load(name, context)
+            .map_err(|e| format!("Failed to merge include: {:?}", e))?;
+
+        stack.push(name.to_string());
+        merge_includes_recursive(context, &mut doc.root, stack)?;
+
+        yaml.merge_from(&doc.root);
     }
 
     Ok(())

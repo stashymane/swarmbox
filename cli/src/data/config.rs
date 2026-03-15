@@ -50,24 +50,4 @@ impl Paths {
             out: out_path,
         })
     }
-
-    pub fn resolve_source(&self, path: &PathBuf) -> PathBuf {
-        self.source.join(path)
-    }
-
-    pub fn resolve_out(&self, path: &PathBuf) -> PathBuf {
-        self.out.join(path)
-    }
-
-    pub fn get_config_path(&self) -> PathBuf {
-        self.source.join("configs")
-    }
-
-    pub fn get_module_path(&self) -> PathBuf {
-        self.source.join("modules")
-    }
-
-    pub fn get_stack_path(&self) -> PathBuf {
-        self.source.join("stacks")
-    }
 }

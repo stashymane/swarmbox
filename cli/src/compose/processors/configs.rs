@@ -1,6 +1,6 @@
-use crate::compose::context::Context;
+use crate::compose::data::context::Context;
 use crate::compose::data::paths::RelativePath;
-use crate::compose::stacks::StackDocument;
+use crate::compose::data::stacks::StackDocument;
 use crate::compose::yaml::{MappingExt, YamlOwnedExt};
 use log::trace;
 use saphyr::{MappingOwned, YamlOwned};
@@ -16,94 +16,24 @@ struct ResolvedConfig {
 }
 
 pub fn process_configs(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
-    let resolved_configs = collect_referenced_configs(context, &doc.root)?;
-    rewrite_service_config_references(&mut doc.root, &resolved_configs);
+    let resolved_configs = collect_and_rewrite_configs(context, &mut doc.root)?;
     insert_top_level_configs(&mut doc.root, &resolved_configs);
     Ok(())
 }
 
-fn collect_referenced_configs(
+fn collect_and_rewrite_configs(
     context: &Context,
-    yaml: &MappingOwned,
+    yaml: &mut MappingOwned,
 ) -> Result<HashMap<String, ResolvedConfig>, String> {
     let Some(services) = yaml
-        .get_value("services")
-        .map(YamlOwned::as_mapping)
+        .get_value_mut("services")
+        .map(YamlOwned::as_mapping_mut)
         .flatten()
     else {
         return Ok(HashMap::new());
     };
 
-    let mut resolved_configs = HashMap::new();
-
-    for (key, service) in services.iter() {
-        let Some(service) = service.as_mapping() else {
-            trace!("Service {:?} is not a mapping, skipping", key.as_str());
-            continue;
-        };
-
-        let Some(configs) = service
-            .get_value("configs")
-            .map(YamlOwned::as_sequence)
-            .flatten()
-        else {
-            trace!("Service {:?} has no configs, skipping", key.as_str());
-            continue;
-        };
-
-        for config in configs.iter() {
-            let YamlOwned::Mapping(config) = config else {
-                continue;
-            };
-
-            let Some(YamlOwned::Tagged(tag, source)) = config.get(&YamlOwned::value_of("source"))
-            else {
-                continue;
-            };
-
-            if tag.suffix != "config" {
-                continue;
-            }
-
-            let Some(config_name) = source.as_str() else {
-                continue;
-            };
-
-            if resolved_configs.contains_key(config_name) {
-                continue;
-            }
-
-            let Some(config_path) = context.configs.get(config_name) else {
-                return Err(format!("Config {} not found", config_name));
-            };
-
-            let key = safe_config_name(config_path)
-                .ok_or_else(|| format!("Config {} has an invalid path name", config_name))?;
-            let full_path = config_path.get_full_path(&context.config.paths.configs);
-            let name = hashed_config_name(&key, full_path.as_path())
-                .ok_or_else(|| format!("Failed to hash config {}", config_name))?;
-
-            resolved_configs.insert(
-                config_name.to_string(),
-                ResolvedConfig {
-                    key,
-                    name,
-                    file: full_path.to_string_lossy().into_owned(),
-                },
-            );
-        }
-    }
-
-    Ok(resolved_configs)
-}
-
-fn rewrite_service_config_references(
-    yaml: &mut MappingOwned,
-    resolved_configs: &HashMap<String, ResolvedConfig>,
-) {
-    let Some(YamlOwned::Mapping(services)) = yaml.get_value_mut("services") else {
-        return;
-    };
+    let mut resolved_configs: HashMap<String, ResolvedConfig> = HashMap::new();
 
     for (key, service) in services.iter_mut() {
         let Some(service) = service.as_mapping_mut() else {
@@ -121,30 +51,61 @@ fn rewrite_service_config_references(
         };
 
         for config in configs.iter_mut() {
-            let YamlOwned::Mapping(config) = config else {
+            let Some(config_map) = config.as_mapping_mut() else {
+                trace!("Config {:?} is not a mapping, skipping", config.as_str());
                 continue;
             };
 
-            let Some(config_name) = config
-                .get(&YamlOwned::value_of("source"))
-                .and_then(|source| match source {
-                    YamlOwned::Tagged(tag, source) if tag.suffix == "config" => {
-                        source.as_str().map(str::to_owned)
-                    }
-                    _ => None,
-                })
+            let Some(YamlOwned::Tagged(tag, source)) =
+                config_map.get(&YamlOwned::value_of("source"))
             else {
                 continue;
             };
 
+            if tag.suffix != "config" {
+                continue;
+            }
+
+            let Some(config_name) = source.as_str().map(|it| it.to_string()) else {
+                continue;
+            };
+
+            // If already resolved, just update the source and skip re-resolving
             if let Some(resolved) = resolved_configs.get(&config_name) {
-                config.insert(
+                config_map.insert(
                     YamlOwned::value_of("source"),
                     YamlOwned::value_of(resolved.key.clone()),
                 );
+                continue;
             }
+
+            let Some(config_path) = context.configs.get(&config_name) else {
+                return Err(format!("Config {} not found", config_name));
+            };
+
+            let key = safe_config_name(config_path)
+                .ok_or_else(|| format!("Config {} has an invalid path name", config_name))?;
+            let full_path = config_path.get_full_path(&context.config.paths.configs);
+            let name = hashed_config_name(&key, full_path.as_path())
+                .ok_or_else(|| format!("Failed to hash config {}", config_name))?;
+
+            config_map.insert(
+                YamlOwned::value_of("source"),
+                YamlOwned::value_of(key.clone()),
+            );
+
+            resolved_configs.insert(
+                config_name.to_string(),
+                ResolvedConfig {
+                    key,
+                    name,
+                    file: full_path.to_string_lossy().into_owned(),
+                },
+            );
         }
     }
+
+    Ok(resolved_configs)
 }
 
 fn insert_top_level_configs(
