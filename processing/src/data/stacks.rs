@@ -64,8 +64,9 @@ impl StackDocument {
         Ok(doc)
     }
 
-    pub async fn write(self) {
+    pub async fn write(self) -> PathBuf {
         let yaml = YamlOwned::Mapping(self.root);
         write_yml(&Yaml::from(&yaml), &self.output_path).await;
+        self.output_path
     }
 }

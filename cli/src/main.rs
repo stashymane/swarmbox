@@ -28,7 +28,7 @@ async fn main() {
     };
 
     if let Err(err) = result {
-        eprintln!("Build failed: {:?}", err);
+        eprintln!("{}", err);
         std::process::exit(1);
     }
 

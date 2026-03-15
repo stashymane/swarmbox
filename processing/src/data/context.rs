@@ -8,6 +8,7 @@ use crate::yaml::write_yml;
 use log::debug;
 use saphyr::YamlOwned;
 use shared::data::{Config, RelativePath};
+use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
 
 pub struct ProcessingContext {
@@ -37,7 +38,7 @@ impl ProcessingContext {
         })
     }
 
-    pub async fn process(&self, source_path: &RelativePath) -> Result<(), String> {
+    pub async fn process(&self, source_path: &RelativePath) -> Result<PathBuf, String> {
         debug!("Processing \"{:?}\"", source_path);
         let mut doc = StackDocument::load(source_path, &self.config)
             .await
@@ -52,8 +53,8 @@ impl ProcessingContext {
             processor.process(&mut doc, &self.config).await?;
         }
 
-        doc.write().await;
+        let output_path = doc.write().await;
 
-        Ok(())
+        Ok(output_path)
     }
 }
