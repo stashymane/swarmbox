@@ -4,12 +4,12 @@ use crate::yaml::{MappingExt, YamlOwnedExt};
 use log::debug;
 use saphyr::{MappingOwned, YamlOwned};
 
-pub fn merge_includes(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
-    merge_includes_recursive(context, &mut doc.root, &mut Vec::new())?;
+pub async fn merge_includes(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
+    merge_includes_recursive(context, &mut doc.root, &mut Vec::new()).await?;
     Ok(())
 }
 
-fn merge_includes_recursive(
+async fn merge_includes_recursive(
     context: &Context,
     yaml: &mut MappingOwned,
     stack: &mut Vec<String>,
@@ -40,10 +40,11 @@ fn merge_includes_recursive(
 
         debug!("Merging module {:?}", name);
         let mut doc = StackDocument::load(name, context)
+            .await
             .map_err(|e| format!("Failed to merge include: {:?}", e))?;
 
         stack.push(name.to_string());
-        merge_includes_recursive(context, &mut doc.root, stack)?;
+        Box::pin(merge_includes_recursive(context, &mut doc.root, stack)).await?;
 
         yaml.merge_from(&doc.root);
     }

@@ -8,7 +8,8 @@ use std::time::Instant;
 
 mod commands;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("debug"));
 
     let cli = Cli::parse();
@@ -24,7 +25,7 @@ fn main() {
 
     let before = Instant::now();
     match cli.command {
-        Commands::Build(args) => build_command(config, args),
+        Commands::Build(args) => build_command(config, args).await,
     }
     let after = Instant::now();
     info!("Done in {:?}", after.duration_since(before));

@@ -6,7 +6,7 @@ use saphyr::{MappingOwned, YamlOwned};
 use sha2::{Digest, Sha256};
 use shared::data::RelativePath;
 use std::collections::HashMap;
-use std::fs::read;
+use tokio::fs::read;
 
 #[derive(Debug, Clone)]
 struct ResolvedConfig {
@@ -15,13 +15,13 @@ struct ResolvedConfig {
     file: String,
 }
 
-pub fn process_configs(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
-    let resolved_configs = collect_and_rewrite_configs(context, &mut doc.root)?;
+pub async fn process_configs(doc: &mut StackDocument, context: &Context) -> Result<(), String> {
+    let resolved_configs = collect_and_rewrite_configs(context, &mut doc.root).await?;
     insert_top_level_configs(&mut doc.root, &resolved_configs);
     Ok(())
 }
 
-fn collect_and_rewrite_configs(
+async fn collect_and_rewrite_configs(
     context: &Context,
     yaml: &mut MappingOwned,
 ) -> Result<HashMap<String, ResolvedConfig>, String> {
@@ -87,6 +87,7 @@ fn collect_and_rewrite_configs(
                 .ok_or_else(|| format!("Config {} has an invalid path name", config_name))?;
             let full_path = config_path.get_full_path(&context.config.paths.configs);
             let name = hashed_config_name(&key, full_path.as_path())
+                .await
                 .ok_or_else(|| format!("Failed to hash config {}", config_name))?;
 
             config_map.insert(
@@ -145,8 +146,8 @@ pub fn safe_config_name(path: &RelativePath) -> Option<String> {
     Some(path.name()?.replace("/", "__"))
 }
 
-fn hashed_config_name(base: &str, full_path: &std::path::Path) -> Option<String> {
-    let bytes = read(full_path).ok()?;
+async fn hashed_config_name(base: &str, full_path: &std::path::Path) -> Option<String> {
+    let bytes = read(full_path).await.ok()?;
 
     let mut hasher = Sha256::new();
     hasher.update(bytes);

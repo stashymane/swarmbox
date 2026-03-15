@@ -12,9 +12,11 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn load(config: Config) -> Context {
-        let sources = collect_paths(&config.paths.source, is_yml).unwrap();
-        let configs = collect_paths(&config.paths.configs, |_| true).unwrap();
+    pub async fn load(config: Config) -> Context {
+        let sources = collect_paths(&config.paths.source, is_yml).await.unwrap();
+        let configs = collect_paths(&config.paths.configs, |_| true)
+            .await
+            .unwrap();
 
         Context {
             config,
@@ -24,14 +26,14 @@ impl Context {
     }
 }
 
-fn collect_paths(
+async fn collect_paths(
     dir: &PathBuf,
     filter: fn(&PathBuf) -> bool,
 ) -> Result<HashMap<String, RelativePath>, Error> {
     let mut sources = HashMap::<String, RelativePath>::new();
 
-    walk_path(dir)?
-        .map_to_paths()?
+    walk_path(dir)
+        .await?
         .into_iter()
         .filter(filter)
         .for_each(|path| {

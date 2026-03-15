@@ -6,23 +6,33 @@ use crate::yaml::write_yml;
 use saphyr::YamlOwned;
 use shared::data::RelativePath;
 
-type Processor = fn(&mut StackDocument, &Context) -> Result<(), String>;
+use std::future::Future;
+use std::pin::Pin;
 
-pub fn generate_stack(context: &Context, stack: &String) -> Result<String, String> {
+type Processor = for<'a> fn(
+    &'a mut StackDocument,
+    &'a Context,
+) -> Pin<Box<dyn Future<Output = Result<(), String>> + 'a>>;
+
+pub async fn generate_stack(context: &Context, stack: &String) -> Result<String, String> {
     println!("Generating stack {:?}...", stack);
-    let processors: [Processor; 2] = [merge_includes, process_configs];
+    let processors: [Processor; 2] = [
+        |doc, context| Box::pin(merge_includes(doc, context)),
+        |doc, context| Box::pin(process_configs(doc, context)),
+    ];
 
     let (name, _) = find_stack_by_name(context, stack)
         .ok_or_else(|| format!("Could not find {}.yml", stack))?;
 
     let mut doc = StackDocument::load(name, context)
+        .await
         .or_else(|e| Err(format!("Failed to load stack \"{}\": {:?}", stack, e)))?;
 
     for processor in processors {
-        processor(&mut doc, context)?;
+        processor(&mut doc, context).await?;
     }
 
-    write_yml(&YamlOwned::Mapping(doc.root), &doc.output_path);
+    write_yml(&YamlOwned::Mapping(doc.root), &doc.output_path).await;
 
     Ok(name.to_string())
 }

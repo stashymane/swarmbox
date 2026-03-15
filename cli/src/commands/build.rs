@@ -17,8 +17,8 @@ pub struct BuildArgs {
     watch: bool,
 }
 
-pub fn build_command(config: Config, args: BuildArgs) {
-    let state = Context::load(config);
+pub async fn build_command(config: Config, args: BuildArgs) {
+    let state = Context::load(config).await;
     debug!("Loaded state: {:?}", state);
 
     let stacks = if args.stacks.is_empty() {
@@ -28,7 +28,7 @@ pub fn build_command(config: Config, args: BuildArgs) {
     };
 
     for stack in stacks.iter() {
-        let result = generate_stack(&state, stack);
+        let result = generate_stack(&state, stack).await;
 
         match result {
             Ok(name) => {

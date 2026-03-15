@@ -17,12 +17,12 @@ pub enum StackDocumentError {
 }
 
 impl StackDocument {
-    pub fn load(name: &str, context: &Context) -> Result<StackDocument, StackDocumentError> {
+    pub async fn load(name: &str, context: &Context) -> Result<StackDocument, StackDocumentError> {
         let project_path = context.sources.get(name).ok_or_else(|| {
             StackDocumentError::NotFound(format!("Stack \"{}\" not found", name).to_string())
         })?;
         let source_path = project_path.get_full_path(&context.config.paths.source);
-        let mut yaml_vec = read_yml(&source_path);
+        let mut yaml_vec = read_yml(&source_path).await;
         let yaml = yaml_vec.pop().ok_or_else(|| {
             StackDocumentError::Invalid(format!("Stack \"{}\" not found", name).to_string())
         })?;
