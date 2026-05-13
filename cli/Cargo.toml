@@ -6,14 +6,9 @@ edition.workspace = true
 [dependencies]
 shared = { path = "../shared" }
 processing = { path = "../processing" }
-util = { path = "../util" }
 
 clap = { workspace = true }
 tokio = { workspace = true }
-saphyr = { workspace = true }
 
 log = { workspace = true }
 env_logger = { workspace = true }
-
-regex = "1.12.3"
-sha2 = "0.10.9"
