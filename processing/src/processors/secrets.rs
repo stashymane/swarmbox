@@ -3,7 +3,7 @@ use crate::processors::processor::Processor;
 use crate::yaml::{MappingExt, YamlOwnedExt};
 use async_trait::async_trait;
 use log::debug;
-use saphyr::{ScalarOwned, YamlOwned};
+use saphyr::YamlOwned;
 use shared::data::Config;
 use std::env;
 use std::fs;
@@ -43,7 +43,7 @@ impl Processor for SecretProcessor {
 
 pub async fn process_secrets(
     doc: &mut StackDocument,
-    config: &Config,
+    _config: &Config,
     context: &SecretProcessor,
 ) -> Result<(), String> {
     let yaml = &mut doc.root;

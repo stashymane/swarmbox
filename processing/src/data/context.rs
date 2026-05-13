@@ -4,12 +4,9 @@ use crate::processors::configs::ConfigProcessor;
 use crate::processors::includes::IncludeProcessor;
 use crate::processors::processor::Processor;
 use crate::processors::secrets::SecretProcessor;
-use crate::yaml::write_yml;
 use log::debug;
-use saphyr::YamlOwned;
 use shared::data::{Config, RelativePath};
 use std::path::PathBuf;
-use tokio::io::AsyncWriteExt;
 
 pub struct ProcessingContext {
     pub config: Config,
