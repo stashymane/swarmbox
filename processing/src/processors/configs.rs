@@ -201,11 +201,8 @@ pub fn safe_config_name(path: &RelativePath) -> Option<String> {
 
 async fn hashed_config_name(base: &str, full_path: &std::path::Path) -> Option<String> {
     let bytes = read(full_path).await.ok()?;
+    let digest = Sha256::digest(bytes);
 
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    let digest = hasher.finalize();
-
-    let short_hash = format!("{:x}", digest);
-    Some(format!("{}-{}", base, &short_hash[..12]))
+    let hex = hex::encode(digest);
+    Some(format!("{}-{}", base, &hex[..12]))
 }

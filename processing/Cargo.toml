@@ -14,5 +14,5 @@ saphyr = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 
-regex = "1.12.3"
-sha2 = "0.10.9"
+sha2 = { workspace = true }
+hex = "0.4.3"
