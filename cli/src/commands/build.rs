@@ -1,7 +1,9 @@
 use clap::Args;
 use processing::data::context::ProcessingContext;
 use shared::data::{Config, RelativePath};
+use std::fs::write;
 use std::path::PathBuf;
+use tokio::fs::create_dir_all;
 
 #[derive(Debug, Args)]
 pub struct BuildArgs {
@@ -19,6 +21,7 @@ pub struct BuildArgs {
 }
 
 pub async fn build_command(config: Config, args: BuildArgs) -> Result<(), String> {
+    initialize_out(&config.paths.out).await?;
     let context = ProcessingContext::load(config).await?;
 
     let stacks = if args.stacks.is_empty() {
@@ -46,6 +49,24 @@ pub async fn build_command(config: Config, args: BuildArgs) -> Result<(), String
             validate_stack(&stack_path)?;
         }
     }
+
+    Ok(())
+}
+
+async fn initialize_out(path: &PathBuf) -> Result<(), String> {
+    if path.exists() {
+        return Err(format!(
+            "Output path already exists: {}",
+            path.to_str().unwrap()
+        ));
+    }
+
+    create_dir_all(path)
+        .await
+        .map_err(|e| format!("Failed to create out directory: {}", e))?;
+
+    write(path.join(".gitignore"), "*")
+        .map_err(|e| format!("Failed to create .gitignore file: {}", e))?;
 
     Ok(())
 }
