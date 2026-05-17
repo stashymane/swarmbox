@@ -1,6 +1,7 @@
 use crate::data::stacks::StackDocument;
 use crate::processors::processor::Processor;
 use crate::yaml::{MappingExt, YamlOwnedExt};
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use log::debug;
 use saphyr::YamlOwned;
@@ -23,17 +24,16 @@ impl SecretProcessor {
 
 #[async_trait]
 impl Processor for SecretProcessor {
-    async fn setup(&mut self, config: &Config) -> Result<(), String> {
+    async fn setup(&mut self, config: &Config) -> anyhow::Result<()> {
         let secrets_dir = config.paths.out.join("secrets");
-        fs::create_dir_all(&secrets_dir)
-            .map_err(|e| format!("Failed to create secrets directory: {}", e))?;
+        fs::create_dir_all(&secrets_dir).context("Failed to create secrets directory")?;
 
         self.secrets_dir = secrets_dir;
 
         Ok(())
     }
 
-    async fn process(&self, doc: &mut StackDocument, config: &Config) -> Result<(), String> {
+    async fn process(&self, doc: &mut StackDocument, config: &Config) -> anyhow::Result<()> {
         debug!("{}: Processing secrets...", doc.stack_name);
         process_secrets(doc, config, self).await?;
 
@@ -45,7 +45,7 @@ pub async fn process_secrets(
     doc: &mut StackDocument,
     _config: &Config,
     context: &SecretProcessor,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
     let yaml = &mut doc.root;
 
     let Some(secrets) = yaml
@@ -68,11 +68,11 @@ pub async fn process_secrets(
 
     for (secret_name, env_var_name) in secrets_to_process {
         let env_value = env::var(&env_var_name)
-            .map_err(|_| format!("Environment variable '{}' not found", env_var_name))?;
+            .map_err(|_| anyhow!("Environment variable '{}' not found", env_var_name))?;
 
         let secret_file_path = context.secrets_dir.join(&secret_name);
         fs::write(&secret_file_path, &env_value)
-            .map_err(|e| format!("Failed to write secret file: {}", e))?;
+            .map_err(|e| anyhow!("Failed to write secret file: {}", e))?;
 
         if let Some(secret_entry) = secrets
             .get_mut(&YamlOwned::value_of(secret_name))

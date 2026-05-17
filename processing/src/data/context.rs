@@ -4,6 +4,7 @@ use crate::processors::configs::ConfigProcessor;
 use crate::processors::includes::IncludeProcessor;
 use crate::processors::processor::Processor;
 use crate::processors::secrets::SecretProcessor;
+use anyhow::anyhow;
 use log::debug;
 use shared::data::{Config, RelativePath};
 use std::path::PathBuf;
@@ -15,7 +16,7 @@ pub struct ProcessingContext {
 }
 
 impl ProcessingContext {
-    pub async fn load(config: Config) -> Result<ProcessingContext, String> {
+    pub async fn load(config: Config) -> anyhow::Result<ProcessingContext> {
         let cache = Cache::load(&config.paths.root, |_path| false).await?;
 
         let mut processors: Vec<Box<dyn Processor>> = vec![
@@ -35,14 +36,15 @@ impl ProcessingContext {
         })
     }
 
-    pub async fn process(&self, source_path: &RelativePath) -> Result<PathBuf, String> {
+    pub async fn process(&self, source_path: &RelativePath) -> anyhow::Result<PathBuf> {
         debug!("Processing \"{:?}\"", source_path);
         let mut doc = StackDocument::load(source_path, &self.config)
             .await
             .or_else(|e| {
-                Err(format!(
+                Err(anyhow!(
                     "Failed to load stack \"{:?}\": {:?}",
-                    source_path, e
+                    source_path,
+                    e
                 ))
             })?;
 

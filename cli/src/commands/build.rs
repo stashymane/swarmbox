@@ -1,9 +1,12 @@
+use crate::docker::commands::DockerCli;
+use anyhow::{anyhow, Context};
 use clap::Args;
+use log::{debug, info};
 use processing::data::context::ProcessingContext;
 use shared::data::{Config, RelativePath};
 use std::fs::write;
 use std::path::PathBuf;
-use tokio::fs::create_dir_all;
+use tokio::fs::{create_dir_all, remove_dir_all};
 
 #[derive(Debug, Args)]
 pub struct BuildArgs {
@@ -12,6 +15,9 @@ pub struct BuildArgs {
     /// Where the built files should be placed
     #[arg(short, long, default_value = "./out")]
     output: PathBuf,
+    /// Delete the current "out" directory before building
+    #[arg(long, default_value = "false")]
+    overwrite: bool,
     /// Watch for project changes and rebuild automatically
     #[arg(long, default_value = "false")]
     watch: bool,
@@ -20,8 +26,8 @@ pub struct BuildArgs {
     validate: bool,
 }
 
-pub async fn build_command(config: Config, args: BuildArgs) -> Result<(), String> {
-    initialize_out(&config.paths.out).await?;
+pub async fn build_command(config: Config, args: BuildArgs) -> anyhow::Result<()> {
+    initialize_out(&config.paths.out, args.overwrite).await?;
     let context = ProcessingContext::load(config).await?;
 
     let stacks = if args.stacks.is_empty() {
@@ -34,39 +40,56 @@ pub async fn build_command(config: Config, args: BuildArgs) -> Result<(), String
         .into_iter()
         .map(resolve_stack)
         .map(|it| verify_or_err(it, &context.config))
-        .collect::<Result<Vec<_>, String>>()?;
+        .collect::<anyhow::Result<Vec<_>>>()?;
 
     for stack in stacks.into_iter() {
         let path = Option::ok_or_else(RelativePath::new(stack.to_owned()), || {
-            format!("Path {:?} must be relative", stack)
+            anyhow!("Path {:?} must be relative", stack)
         })?;
 
-        println!("Processing {:?}...", stack);
-        let stack_path = context.process(&path).await?;
+        info!("Processing {:?}...", stack);
+        let stack_path = context
+            .process(&path)
+            .await
+            .with_context(|| format!("Failed to process stack {:?}", stack))?;
+        println!("Processed {:?}", stack);
 
         if args.validate {
-            println!("Validating {:?}...", stack);
-            validate_stack(&stack_path)?;
+            debug!("Validating {:?}...", stack);
+            match DockerCli::stack_config(vec![stack_path], false) {
+                Ok(_) => {
+                    println!("{:?} validated successfully", stack);
+                }
+                Err(e) => {
+                    eprintln!("Failed to validate {:?}:", stack);
+                    eprintln!("{}", e);
+                }
+            }
         }
     }
 
     Ok(())
 }
 
-async fn initialize_out(path: &PathBuf) -> Result<(), String> {
+async fn initialize_out(path: &PathBuf, overwrite: bool) -> anyhow::Result<()> {
     if path.exists() {
-        return Err(format!(
-            "Output path already exists: {}",
-            path.to_str().unwrap()
-        ));
+        if overwrite {
+            remove_dir_all(path)
+                .await
+                .context("Failed to delete out directory")?;
+        } else {
+            return Err(anyhow!(
+                "Output path already exists: {}",
+                path.to_str().unwrap()
+            ));
+        }
     }
 
     create_dir_all(path)
         .await
-        .map_err(|e| format!("Failed to create out directory: {}", e))?;
+        .context("Failed to create out directory")?;
 
-    write(path.join(".gitignore"), "*")
-        .map_err(|e| format!("Failed to create .gitignore file: {}", e))?;
+    write(path.join(".gitignore"), "*").context("Failed to create .gitignore file")?;
 
     Ok(())
 }
@@ -80,38 +103,14 @@ fn resolve_stack(name: String) -> PathBuf {
     path
 }
 
-fn verify_or_err(path: PathBuf, config: &Config) -> Result<PathBuf, String> {
+fn verify_or_err(path: PathBuf, config: &Config) -> anyhow::Result<PathBuf> {
     let file_path = config.paths.source.join(&path);
     if !file_path.exists() {
-        return Err(format!("Stack \"{:?}\" does not exist", &path));
+        return Err(anyhow!("{:?} does not exist at {:?}", &path, &file_path));
     }
     if !file_path.is_file() {
-        return Err(format!(
-            "Stack \"{:?}\" must be a file, not a directory",
-            &path
-        ));
+        return Err(anyhow!("{:?} must be a file, not a directory", &path));
     }
 
     Ok(path)
-}
-
-fn validate_stack(path: &PathBuf) -> Result<(), String> {
-    let output = std::process::Command::new("docker")
-        .arg("stack")
-        .arg("config")
-        .arg("-c")
-        .arg(path)
-        .output();
-
-    let result = output.map_err(|err| format!("Failed to call Docker command: {:?}", err))?;
-
-    if !result.status.success() {
-        return Err(format!(
-            "{:?}: Failed to validate ({:?})",
-            path,
-            String::from_utf8_lossy(&result.stderr)
-        ));
-    }
-
-    Ok(())
 }

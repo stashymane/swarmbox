@@ -1,6 +1,7 @@
 use crate::data::stacks::StackDocument;
 use crate::processors::processor::Processor;
 use crate::yaml::{MappingExt, YamlOwnedExt};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use log::{debug, trace};
 use saphyr::{MappingOwned, YamlOwned};
@@ -31,16 +32,19 @@ pub struct ConfigEntry {
 
 #[async_trait]
 impl Processor for ConfigProcessor {
-    async fn setup(&mut self, config: &Config) -> Result<(), String> {
+    async fn setup(&mut self, config: &Config) -> anyhow::Result<()> {
         let config_dir = &config.paths.configs;
         let config_files = walk_path(config_dir)
             .await
-            .map_err(|e| format!("Failed to walk config: {:?}", e))?;
+            .map_err(|e| anyhow!("Failed to walk config: {:?}", e))?;
 
         for path in config_files {
             let project_path = RelativePath::from(&path, config_dir)
-                .map_err(|e| format!("Failed to retrieve relative path: {:?}", e))?;
-            let name = Option::ok_or(project_path.name(), "Failed to retrieve project name")?;
+                .map_err(|e| anyhow!("Failed to retrieve relative path: {:?}", e))?;
+            let name = Option::ok_or(
+                project_path.name(),
+                anyhow!("Failed to retrieve project name"),
+            )?;
 
             let entry = ConfigEntry {
                 name: name.to_owned(),
@@ -54,7 +58,7 @@ impl Processor for ConfigProcessor {
         Ok(())
     }
 
-    async fn process(&self, doc: &mut StackDocument, _config: &Config) -> Result<(), String> {
+    async fn process(&self, doc: &mut StackDocument, _config: &Config) -> anyhow::Result<()> {
         debug!("{}: Processing configs...", doc.stack_name);
         let resolved_configs = collect_and_rewrite_configs(self, &mut doc.root).await?;
         insert_top_level_configs(&mut doc.root, &resolved_configs);
@@ -72,7 +76,7 @@ struct ResolvedConfig {
 async fn collect_and_rewrite_configs(
     context: &ConfigProcessor,
     yaml: &mut MappingOwned,
-) -> Result<HashMap<String, ResolvedConfig>, String> {
+) -> anyhow::Result<HashMap<String, ResolvedConfig>> {
     let Some(services) = yaml
         .get_value_mut("services")
         .map(YamlOwned::as_mapping_mut)
@@ -131,16 +135,16 @@ async fn collect_and_rewrite_configs(
             }
 
             let Some(config) = context.configs.get(&config_name) else {
-                return Err(format!("Config {} not found", config_name));
+                return Err(anyhow!("Config {} not found", config_name));
             };
             let full_path = &config.absolute_path;
 
             let key = Option::ok_or_else(safe_config_name(&config.project_path), || {
-                format!("Config {} has an invalid path name", config_name)
+                anyhow!("Config {} has an invalid path name", config_name)
             })?;
             let name =
                 Option::ok_or_else(hashed_config_name(&key, full_path.as_path()).await, || {
-                    format!("Failed to hash config {}", config_name)
+                    anyhow!("Failed to hash config {}", config_name)
                 })?;
 
             config_map.insert(

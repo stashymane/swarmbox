@@ -3,6 +3,7 @@ use saphyr::{MappingOwned, Yaml, YamlOwned};
 use shared::data::{Config, RelativePath};
 use std::fmt::Debug;
 use std::path::PathBuf;
+use thiserror::Error;
 
 pub struct StackDocument {
     pub stack_name: String,
@@ -11,24 +12,14 @@ pub struct StackDocument {
     pub root: MappingOwned,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum StackDocumentError {
+    #[error("Stack \"{0}\" not found")]
     NotFound(String),
-    Invalid(String),
-}
-
-impl StackDocumentError {
-    fn invalid_name(name: impl Debug) -> Self {
-        StackDocumentError::Invalid(format!("Stack name is invalid: {:?}", name))
-    }
-
-    fn not_found(name: impl Debug) -> Self {
-        StackDocumentError::NotFound(format!("Stack \"{:?}\" not found", name))
-    }
-
-    fn not_valid(name: impl Debug) -> Self {
-        StackDocumentError::Invalid(format!("Stack \"{:?}\" is not valid", name))
-    }
+    #[error("Stack \"{0}\" is not valid: {1}")]
+    Invalid(String, String),
+    #[error("Stack name \"{0}\" is invalid")]
+    InvalidName(String),
 }
 
 impl StackDocument {
@@ -38,18 +29,23 @@ impl StackDocument {
     ) -> Result<StackDocument, StackDocumentError> {
         let source_path = project_path.get_absolute_path(&config.paths.source);
         let name = Option::ok_or_else(project_path.name(), || {
-            StackDocumentError::invalid_name(project_path)
+            StackDocumentError::InvalidName(project_path.to_str().unwrap().to_owned())
         })?;
 
         let mut yaml_vec = read_yml(&source_path).await;
 
         let yaml = Option::ok_or_else(yaml_vec.pop(), || {
-            StackDocumentError::not_found(project_path)
+            StackDocumentError::NotFound(name.clone())
         })?;
 
         let mapping = match yaml {
             YamlOwned::Mapping(mapping) => mapping,
-            _ => return Err(StackDocumentError::not_valid(project_path)),
+            _ => {
+                return Err(StackDocumentError::Invalid(
+                    name.clone(),
+                    "Expected root to be a mapping".to_string(),
+                ));
+            }
         };
 
         let output_path = project_path.get_absolute_path(&config.paths.out);

@@ -7,6 +7,8 @@ edition.workspace = true
 shared = { path = "../shared" }
 processing = { path = "../processing" }
 
+anyhow = { workspace = true }
+thiserror = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 

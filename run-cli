@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -eou pipefail
+
+cargo run -q --package cli --bin cli -- "$@"

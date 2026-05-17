@@ -7,9 +7,10 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 mod commands;
+pub mod docker;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("debug"));
 
     let cli = Cli::parse();
@@ -23,15 +24,11 @@ async fn main() {
     debug!("Loaded config: {:?}", config);
 
     let before = Instant::now();
-    let result = match cli.command {
-        Commands::Build(args) => build_command(config, args).await,
+    match cli.command {
+        Commands::Build(args) => build_command(config, args).await?,
     };
-
-    if let Err(err) = result {
-        eprintln!("{}", err);
-        std::process::exit(1);
-    }
 
     let after = Instant::now();
     info!("Done in {:?}", after.duration_since(before));
+    Ok(())
 }
